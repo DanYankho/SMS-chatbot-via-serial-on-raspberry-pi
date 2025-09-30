@@ -1,0 +1,46 @@
+import serial
+import time
+import threading
+
+# === SERIAL CONFIG ===
+SERIAL_PORT = "/dev/ttyUSB2"  # your modem SMS port
+BAUD_RATE = 115200            # typical for Huawei modems
+TIMEOUT = 1                   # seconds
+
+# Open serial port
+ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=TIMEOUT)
+
+# === FUNCTIONS ===
+def send_sms(phone, message):
+    """Send an SMS via AT commands."""
+    ser.write(f'AT+CMGS="{phone}"\r'.encode())
+    time.sleep(0.5)
+    ser.write(f'{message}\x1A'.encode())  # Ctrl+Z to send
+    print(f"Sent to {phone}: {message}")
+
+def read_sms_loop():
+    """Continuously read SMS messages and respond to 'vsla'."""
+    while True:
+        line = ser.readline().decode(errors='ignore').strip()
+        if line:
+            print("Received line:", line)
+            # Detect incoming message format
+            if line.startswith('+CMT:'):
+                # +CMT: "<sender>",...
+                parts = line.split(',')
+                sender = parts[0].split('"')[1]
+                # Read next line for the actual message content
+                message = ser.readline().decode(errors='ignore').strip()
+                print(f"SMS from {sender}: {message}")
+                if 'vsla' in message.lower():
+                    send_sms(sender, "LETS GO!")
+
+# === THREAD TO READ SMS ===
+thread = threading.Thread(target=read_sms_loop)
+thread.daemon = True
+thread.start()
+
+# Keep the main thread alive
+print("VSLA test bot running. Waiting for SMS...")
+while True:
+    time.sleep(1)
